@@ -79,6 +79,7 @@ class Darknet(nn.Module):
 
     def load_weights(self, weightfile):
         f = open(weightfile, "r")
+        # must set int32 and float32, not int and float
         header = np.fromfile(f, dtype=np.int32, count=5)
         self.header = torch.from_numpy(header)
         self.seen = self.header[3]
@@ -216,7 +217,7 @@ def generate_modules(netList):
         
         elif netBlock["type"] == "upsample":
             stride = netBlock["stride"]
-            upsample = nn.Upsample(scale_factor=stride, mode="bilinear")
+            upsample = nn.Upsample(scale_factor=stride, mode="nearest")
             module.add_module("upsample{0}".format(idx), upsample)
         
         elif netBlock["type"] == "shortcut":
@@ -282,9 +283,11 @@ def generate_modules(netList):
 # netList = read_cfg("cfg/yolov3.cfg")
 # netConfig, modules = generate_modules(netList)
 # print(modules)
-model = Darknet("cfg/yolov3.cfg")
-model.load_weights("yolov3.weights")
-img = get_test_input()
-# pred = model(img, torch.cuda.is_available())
-pred = model(img, CUDA=False)
-print (pred.size())
+# model = Darknet("cfg/yolov3.cfg")
+# model.load_weights("yolov3.weights")
+# img = get_test_input()
+# # pred = model(img, torch.cuda.is_available())
+# pred = model(img, CUDA=False)
+
+# # TODO: size mismatch
+# print (pred.size())
