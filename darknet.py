@@ -77,6 +77,81 @@ class Darknet(nn.Module):
             x = output
         return result
 
+    def load_weights(self, weightfile):
+        f = open(weightfile, "r")
+        header = np.fromfile(f, dtype=np.int32, count=5)
+        self.header = torch.from_numpy(header)
+        self.seen = self.header[3]
+        weights = np.fromfile(f, dtype = np.float32)
+        ptr = 0
+        for idx, module in enumerate(self.moduleList):
+            modelInfo = self.netList[idx]
+            module_type = self.netList[idx]["type"]
+            if module_type == "convolutional":
+                conv = module[0]
+                if "batch_normalize" in modelInfo and int(modelInfo["batch_normalize"]) == 1:
+                    bn = module[2]
+                    
+                    #Get the number of weights of Batch Norm Layer
+                    num_bn_biases = bn.bias.numel()
+        
+                    #Load the weights
+                    bn_biases = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
+                    ptr += num_bn_biases
+        
+                    bn_weights = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    ptr  += num_bn_biases
+        
+                    bn_running_mean = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    ptr  += num_bn_biases
+        
+                    bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
+                    ptr  += num_bn_biases
+        
+                    #Cast the loaded weights into dims of model weights. 
+                    bn_biases = bn_biases.view_as(bn.bias.data)
+                    bn_weights = bn_weights.view_as(bn.weight.data)
+                    bn_running_mean = bn_running_mean.view_as(bn.running_mean)
+                    bn_running_var = bn_running_var.view_as(bn.running_var)
+        
+                    #Copy the data to model
+                    bn.bias.data.copy_(bn_biases)
+                    bn.weight.data.copy_(bn_weights)
+                    bn.running_mean.copy_(bn_running_mean)
+                    bn.running_var.copy_(bn_running_var)
+
+                else:        
+                    #Number of biases
+                    num_biases = conv.bias.numel()
+                
+                    #Load the weights
+                    conv_biases = torch.from_numpy(weights[ptr: ptr + num_biases])
+                    ptr = ptr + num_biases
+                
+                    #reshape the loaded weights according to the dims of the model weights
+                    conv_biases = conv_biases.view_as(conv.bias.data)
+                
+                    #Finally copy the data
+                    conv.bias.data.copy_(conv_biases)
+                    
+                #Let us load the weights for the Convolutional layers
+                num_weights = conv.weight.numel()
+                
+                #Do the same as above for weights
+                conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
+                ptr = ptr + num_weights
+                
+                conv_weights = conv_weights.view_as(conv.weight.data)
+                conv.weight.data.copy_(conv_weights)
+
+
+                    
+
+
+
+
+
+
             
 
 def read_cfg(cfgPath):
@@ -122,11 +197,15 @@ def generate_modules(netList):
                     padding = 0
                 activation = netBlock["activation"]
                 batch_normalize = -1
-                if "batch_normalize" in netBlock:
+                if "batch_normalize" in netBlock and int(netBlock["batch_normalize"]) == 1:
                     batch_normalize = int(netBlock["batch_normalize"])
+                    bias = False
+                else:
+                    batch_normalize = -1
+                    bias = True
             except KeyError:
                 print(idx+1, " have generated KeyError")
-            conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding,)
+            conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
             module.add_module("conv{0}".format(idx), conv)
             if activation == "leaky":
                 relu = nn.LeakyReLU(0.01, True)
@@ -204,6 +283,7 @@ def generate_modules(netList):
 # netConfig, modules = generate_modules(netList)
 # print(modules)
 model = Darknet("cfg/yolov3.cfg")
+model.load_weights("yolov3.weights")
 img = get_test_input()
 # pred = model(img, torch.cuda.is_available())
 pred = model(img, CUDA=False)
