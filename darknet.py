@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 from torch.autograd import Variable
 import numpy as np
+import sys
 
 class DetectionLayer(nn.Module):
     def __init__(self, anchors):
@@ -69,7 +70,7 @@ class Darknet(nn.Module):
                     raise Exception("Image height and width do not match")
                 num_classes = int(self.netList[idx]["classes"])
                 if firstYOLO == True:
-                    firstYOLO == False
+                    firstYOLO = False
                     result = output_transform(output.data, img_dim, anchors, num_classes)
                 else:
                     result = torch.cat((result, output_transform(output.data, img_dim, anchors, num_classes)), dim=1)
@@ -91,7 +92,7 @@ class Darknet(nn.Module):
             if module_type == "convolutional":
                 conv = module[0]
                 if "batch_normalize" in modelInfo and int(modelInfo["batch_normalize"]) == 1:
-                    bn = module[2]
+                    bn = module[1]
                     
                     #Get the number of weights of Batch Norm Layer
                     num_bn_biases = bn.bias.numel()
@@ -208,12 +209,12 @@ def generate_modules(netList):
                 print(idx+1, " have generated KeyError")
             conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
             module.add_module("conv{0}".format(idx), conv)
-            if activation == "leaky":
-                relu = nn.LeakyReLU(0.01, True)
-                module.add_module("leaky{0}".format(idx), relu)
             if batch_normalize != -1:
                 bn = nn.BatchNorm2d(out_channels)
                 module.add_module("bn{0}".format(idx), bn)
+            if activation == "leaky":
+                relu = nn.LeakyReLU(0.1, True)
+                module.add_module("leaky{0}".format(idx), relu)
         
         elif netBlock["type"] == "upsample":
             stride = netBlock["stride"]
@@ -280,14 +281,19 @@ def generate_modules(netList):
 
 
 
-# netList = read_cfg("cfg/yolov3.cfg")
-# netConfig, modules = generate_modules(netList)
+netList = read_cfg("cfg/yolov3.cfg")
+netConfig, modules = generate_modules(netList)
 # print(modules)
-# model = Darknet("cfg/yolov3.cfg")
-# model.load_weights("yolov3.weights")
-# img = get_test_input()
-# # pred = model(img, torch.cuda.is_available())
-# pred = model(img, CUDA=False)
+with open("modulelayout.txt", 'w') as f:
+    original_stdout = sys.stdout
+    sys.stdout = f
+    print(modules)
+    sys.stdout = original_stdout
+model = Darknet("cfg/yolov3.cfg")
+model.load_weights("yolov3.weights")
+img = get_test_input()
+# pred = model(img, torch.cuda.is_available())
+pred = model(img, CUDA=False)
 
-# # TODO: size mismatch
-# print (pred.size())
+# TODO: size mismatch
+print (pred.size())
