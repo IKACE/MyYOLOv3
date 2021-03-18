@@ -104,6 +104,8 @@ def output_transform(output, img_dim, anchors, num_classes, CUDA = False):
     output[:,:,:4] *= stride
     return output
 
+
+
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
     img = cv2.resize(img, (416,416))         

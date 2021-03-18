@@ -12,6 +12,7 @@ from darknet import Darknet
 import pickle as pkl
 import pandas as pd
 import random
+import sys
 
 def arg_parse():
     """
@@ -125,6 +126,7 @@ if CUDA:
     im_dim_list = im_dim_list.cuda()
     
 start_det_loop = time.time()
+count = 0
 for i, batch in enumerate(im_batches):
 #load the image 
     start = time.time()
@@ -133,7 +135,16 @@ for i, batch in enumerate(im_batches):
     # generate raw output
     with torch.no_grad():
         prediction = model(Variable(batch), CUDA)
-    # transform output
+    # # transform output
+    # torch.set_printoptions(profile="full")
+
+    # if count == 0:
+    #     count = 1
+    #     with open("debug_prediction.txt", 'w') as f:
+    #         original_stdout = sys.stdout
+    #         sys.stdout = f    
+    #         print(prediction)
+    #         sys.stdout = original_stdout
     prediction = write_results(prediction, confidence, num_classes, nms_conf = nms_thesh)
 
     end = time.time()

@@ -78,6 +78,119 @@ class Darknet(nn.Module):
             x = output
         return result
 
+    # def forward(self, x, CUDA):
+    #     modules = self.netList
+    #     outputs = {}   #We cache the outputs for the route layer
+        
+    #     write = 0
+    #     for i, module in enumerate(modules):        
+    #         module_type = (module["type"])
+            
+    #         if module_type == "convolutional" or module_type == "upsample":
+    #             x = self.moduleList[i](x)
+    
+    #         elif module_type == "route":
+    #             layers = module["layers"]
+    #             layers = [int(a) for a in layers]
+    
+    #             if (layers[0]) > 0:
+    #                 layers[0] = layers[0] - i
+    
+    #             if len(layers) == 1:
+    #                 x = outputs[i + (layers[0])]
+    
+    #             else:
+    #                 if (layers[1]) > 0:
+    #                     layers[1] = layers[1] - i
+    
+    #                 map1 = outputs[i + layers[0]]
+    #                 map2 = outputs[i + layers[1]]
+    #                 x = torch.cat((map1, map2), 1)
+                
+    
+    #         elif  module_type == "shortcut":
+    #             from_ = int(module["from"])
+    #             x = outputs[i-1] + outputs[i+from_]
+    
+    #         elif module_type == 'yolo':        
+    #             anchors = self.moduleList[i][0].anchors
+    #             #Get the input dimensions
+    #             inp_dim = int (self.netConfig["height"])
+        
+    #             #Get the number of classes
+    #             num_classes = int (module["classes"])
+        
+    #             #Transform 
+    #             x = x.data
+    #             x = output_transform(x, inp_dim, anchors, num_classes, CUDA)
+    #             if not write:              #if no collector has been intialised. 
+    #                 detections = x
+    #                 write = 1
+        
+    #             else:       
+    #                 detections = torch.cat((detections, x), 1)
+        
+    #         outputs[i] = x
+        
+    #     return detections
+
+
+    # def forward(self, x, CUDA):
+    #     modules = self.netList
+    #     outputs = {}   #We cache the outputs for the route layer
+        
+    #     write = 0
+    #     for i, module in enumerate(modules):        
+    #         module_type = (module["type"])
+            
+    #         if module_type == "convolutional" or module_type == "upsample":
+    #             x = self.moduleList[i](x)
+    
+    #         elif module_type == "route":
+    #             layers = module["layers"]
+    #             layers = [int(a) for a in layers]
+    
+    #             if (layers[0]) > 0:
+    #                 layers[0] = layers[0] - i
+    
+    #             if len(layers) == 1:
+    #                 x = outputs[i + (layers[0])]
+    
+    #             else:
+    #                 if (layers[1]) > 0:
+    #                     layers[1] = layers[1] - i
+    
+    #                 map1 = outputs[i + layers[0]]
+    #                 map2 = outputs[i + layers[1]]
+    #                 x = torch.cat((map1, map2), 1)
+                
+    
+    #         elif  module_type == "shortcut":
+    #             from_ = int(module["from"])
+    #             x = outputs[i-1] + outputs[i+from_]
+    
+    #         elif module_type == 'yolo':        
+    #             anchors = self.moduleList[i][0].anchors
+    #             #Get the input dimensions
+    #             inp_dim = int (self.netConfig["height"])
+        
+    #             #Get the number of classes
+    #             num_classes = int (module["classes"])
+        
+    #             #Transform 
+    #             x = x.data
+    #             x = output_transform(x, inp_dim, anchors, num_classes, CUDA)
+    #             if not write:              #if no collector has been intialised. 
+    #                 detections = x
+    #                 write = 1
+        
+    #             else:       
+    #                 detections = torch.cat((detections, x), 1)
+        
+    #         outputs[i] = x
+        
+    #     return detections
+
     def load_weights(self, weightfile):
         f = open(weightfile, "r")
         # must set int32 and float32, not int and float
@@ -231,11 +344,12 @@ def generate_modules(netList):
                 module.add_module("leaky{0}".format(idx), relu)
             if output_filters[idx-1] != output_filters[idx+skipFrom]:
                 raise Exception("Dimensions do not match for shortcut layer at layer idx", idx)
-            out_channels = output_filters[idx-1]
+            out_channels = in_channels
         
         elif netBlock["type"] == "route":
             layers = netBlock["layers"]
             layers = layers.split(",")
+            netBlock["layers"] = layers
             mode = len(layers)
             routeList = []
             if len(layers) == 1:
@@ -266,7 +380,7 @@ def generate_modules(netList):
             masks = netBlock["mask"].split(",")
             masks = [int(mask) for mask in masks]
             anchors = netBlock["anchors"].split(",")
-            anchors = [(anchors[i].rstrip().lstrip(), anchors[i+1].rstrip().lstrip()) for i in range(len(anchors)//2)]
+            anchors = [(anchors[2*i].rstrip().lstrip(), anchors[2*i+1].rstrip().lstrip()) for i in range(len(anchors)//2)]
             anchors = [anchors[mask] for mask in masks]
             yolo = DetectionLayer(anchors)
             out_channels = output_filters[idx-1]
@@ -278,22 +392,23 @@ def generate_modules(netList):
                 
 
 
+        
 
 
 
-netList = read_cfg("cfg/yolov3.cfg")
-netConfig, modules = generate_modules(netList)
-# print(modules)
-with open("modulelayout.txt", 'w') as f:
-    original_stdout = sys.stdout
-    sys.stdout = f
-    print(modules)
-    sys.stdout = original_stdout
-model = Darknet("cfg/yolov3.cfg")
-model.load_weights("yolov3.weights")
-img = get_test_input()
-# pred = model(img, torch.cuda.is_available())
-pred = model(img, CUDA=False)
+# netList = read_cfg("cfg/yolov3.cfg")
+# netConfig, modules = generate_modules(netList)
+# # print(modules)
+# with open("modulelayout.txt", 'w') as f:
+#     original_stdout = sys.stdout
+#     sys.stdout = f
+#     print(modules)
+#     sys.stdout = original_stdout
+# model = Darknet("cfg/yolov3.cfg")
+# model.load_weights("yolov3.weights")
+# img = get_test_input()
+# # pred = model(img, torch.cuda.is_available())
+# pred = model(img, CUDA=False)
 
-# TODO: size mismatch
-print (pred.size())
+# # TODO: size mismatch
+# print (pred.size())
