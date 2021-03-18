@@ -32,8 +32,9 @@ def unique(tensor):
 
 def bbox_iou(box1, box2):
     """
-    Returns the IoU of two bounding boxes 
+    Returns the IoU of two bounding boxes by solving intersection area and two input areas
     
+    Note that box1 should only have one bounding box, but box2 could have multiple
     
     """
     #Get the coordinates of bounding boxes
@@ -147,9 +148,12 @@ def get_test_input():
 #         img_classes = unique(image_pred_[:,-1]) # -1 index holds the class index
 
 def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
+    # thresholding object scores
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
-    
+
+
+    # transform bounding box coordinates to bottom left and top right coordinates
     box_corner = prediction.new(prediction.shape)
     box_corner[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     box_corner[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
@@ -168,11 +172,13 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
        #confidence threshholding 
        #NMS
     
-        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
+        max_conf, max_conf_idx = torch.max(image_pred[:,5:5+ num_classes], 1)
         max_conf = max_conf.float().unsqueeze(1)
-        max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:,:5], max_conf, max_conf_score)
+        max_conf_idx = max_conf_idx.float().unsqueeze(1)
+        seq = (image_pred[:,:5], max_conf, max_conf_idx)
         image_pred = torch.cat(seq, 1)
+
+        # image_pred shape for ((bounding boxes), (x,y,w,h,object score, max conf, max conf idx))
         
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
         try:
@@ -180,12 +186,15 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
         except:
             continue
         
+        # compatibility issue
         if image_pred_.shape[0] == 0:
             continue       
 #        
   
         #Get the various classes detected in the image
         img_classes = unique(image_pred_[:,-1])  # -1 index holds the class index
+
+        # img_classes store the unique classes that are detected in the img
         
         
         for cls in img_classes:
@@ -193,12 +202,18 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
 
         
             #get the detections with one particular class
+
+            # get image_pred that are equal to this class and zero out others
             cls_mask = image_pred_*(image_pred_[:,-1] == cls).float().unsqueeze(1)
+            # get all nonzero elements index
             class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
+            # ge all nonzero elements
             image_pred_class = image_pred_[class_mask_ind].view(-1,7)
             
             #sort the detections such that the entry with the maximum objectness
             #confidence is at the top
+
+            # torch.sort: A namedtuple of (values, indices) is returned, where the values are the sorted values and indices are the indices of the elements in the original input tensor.
             conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]
             image_pred_class = image_pred_class[conf_sort_index]
             idx = image_pred_class.size(0)   #Number of detections
@@ -232,6 +247,7 @@ def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
                 out = torch.cat(seq,1)
                 output = torch.cat((output,out))
 
+    # Each detections has 8 attributes, namely, index of the image in the batch to which the detection belongs to, 4 corner coordinates, objectness score, the score of class with maximum confidence, and the index of that class.
     try:
         return output
     except:
@@ -263,7 +279,7 @@ def prep_image(img, inp_dim):
     Returns a Variable 
     """
 
-    img = cv2.resize(img, (inp_dim, inp_dim))
+    img = letterbox_image(img, (inp_dim, inp_dim))
     img = img[:,:,::-1].transpose((2,0,1)).copy()
     img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
     return img
